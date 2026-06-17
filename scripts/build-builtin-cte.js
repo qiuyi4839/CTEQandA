@@ -72,6 +72,21 @@ function keywordsFor(block, title, type) {
   return Array.from(set).slice(0, 12);
 }
 
+function triggerModeFor(block, title, type) {
+  if (type === 'possible') return 'strict';
+
+  const text = `${title}\n${block}`;
+  if (/(性格|背景|家庭|关系|经历|人设|排序|水平|能力|职业|作息|打法|体型|队服|睡眠|衣着|喜欢听|胆子|酒量|做饭|抽烟|冠军|MBTI)/.test(text)) {
+    return 'normal';
+  }
+
+  if (/(小时候|曾经|成为朋友|母亲|父亲|弟弟|哥哥|CTE像真正的家|手伤|退役)/.test(text)) {
+    return 'broad';
+  }
+
+  return 'strict';
+}
+
 const entries = [];
 
 for (const source of sources) {
@@ -84,6 +99,7 @@ for (const source of sources) {
       id: `cte_${source.type}_${String(index + 1).padStart(3, '0')}`,
       enabled: true,
       sourceType: source.type,
+      triggerMode: triggerModeFor(block, title, source.type),
       title,
       keywords: keywordsFor(block, title, source.type),
       content: block,

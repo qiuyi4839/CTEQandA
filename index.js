@@ -8,6 +8,11 @@ const SOURCE_TYPE_LABELS = {
   possible: '可能发生',
 };
 const STOP_KEYWORDS = new Set(['cte', '如果', '可能发生', '已确定内容', '{{user}}', 'user', '用户']);
+const TRIGGER_MODE_LABELS = {
+  broad: '宽泛',
+  normal: '普通',
+  strict: '严格',
+};
 
 const DEFAULT_STATE = {
   settings: {
@@ -29,6 +34,7 @@ const DEFAULT_STATE = {
       id: 'love_worthiness_rank',
       enabled: true,
       sourceType: 'confirmed',
+      triggerMode: 'normal',
       title: '恋爱配得感排序',
       keywords: ['恋爱配得感', '配得感', '感情自信', '恋爱排序'],
       content: '关于恋爱配得感排序:\n最高: 亓谢/周锦宁.\n靠前: 魏月华/桑洛凡.\n中间: 鹿言/魏星泽.\n偏低: 谌绪/秦述.\n最低: 司洛/孟明赫.',
@@ -90,6 +96,7 @@ function mergeBuiltinEntries() {
     return {
       ...entry,
       sourceType: builtin.sourceType,
+      triggerMode: builtin.triggerMode || defaultTriggerModeForEntry(builtin),
       title: builtin.title,
       keywords: structuredClone(builtin.keywords),
       content: builtin.content,
@@ -147,6 +154,8 @@ function scoreEntry(entry, sourceText) {
   const normalizedSource = normalizeText(rawSource);
   const keywords = Array.isArray(entry.keywords) ? entry.keywords.filter(Boolean) : [];
   let score = 0;
+  let matchedKeywords = 0;
+  let hasStrongMatch = false;
 
   for (const keyword of keywords) {
     const normalizedKeyword = normalizeText(keyword);
@@ -155,21 +164,43 @@ function scoreEntry(entry, sourceText) {
     const regex = parseRegexKeyword(keyword);
     if (regex) {
       regex.lastIndex = 0;
-      if (regex.test(rawSource)) score += 3;
+      if (regex.test(rawSource)) {
+        score += 3;
+        matchedKeywords += 1;
+        hasStrongMatch = true;
+      }
       continue;
     }
 
     if (normalizedKeyword && normalizedSource.includes(normalizedKeyword)) {
       score += Math.max(1, Math.min(4, Math.ceil(normalizedKeyword.length / 4)));
+      matchedKeywords += 1;
+      if (normalizedKeyword.length >= 4) hasStrongMatch = true;
     }
   }
 
   if (state.settings.matchTitle) {
     const title = normalizeText(entry.title);
-    if (title && normalizedSource.includes(title)) score += 2;
+    if (title && normalizedSource.includes(title)) {
+      score += 2;
+      hasStrongMatch = true;
+    }
   }
 
+  if (!passesTriggerMode(entry, score, matchedKeywords, hasStrongMatch)) return 0;
   return score;
+}
+
+function passesTriggerMode(entry, score, matchedKeywords, hasStrongMatch) {
+  const mode = entry.triggerMode || defaultTriggerModeForEntry(entry);
+  if (mode === 'broad') return score >= 1;
+  if (mode === 'strict') return score >= 3 && hasStrongMatch && (matchedKeywords >= 1 || state.settings.matchTitle);
+  return score >= 2 || hasStrongMatch;
+}
+
+function defaultTriggerModeForEntry(entry) {
+  if (entry.sourceType === 'possible') return 'strict';
+  return 'normal';
 }
 
 function getMatchedEntries(chat) {
@@ -501,6 +532,13 @@ function renderEntries() {
           <option value="possible" ${entry.sourceType === 'possible' ? 'selected' : ''}>可能发生</option>
         </select>
       </label>
+      <label>触发模式
+        <select class="text_pole vkb-entry-trigger-mode">
+          <option value="broad" ${(entry.triggerMode || defaultTriggerModeForEntry(entry)) === 'broad' ? 'selected' : ''}>宽泛：人设/背景，可较容易触发</option>
+          <option value="normal" ${(entry.triggerMode || defaultTriggerModeForEntry(entry)) === 'normal' ? 'selected' : ''}>普通：需要明确相关词</option>
+          <option value="strict" ${(entry.triggerMode || defaultTriggerModeForEntry(entry)) === 'strict' ? 'selected' : ''}>严格：细节/假设，减少误触发</option>
+        </select>
+      </label>
       <label>关键词，用逗号分隔；正则可写成 /表达式/i<input class="text_pole vkb-entry-keywords" value="${escapeAttr((entry.keywords || []).join(', '))}"></label>
       <label>备注<input class="text_pole vkb-entry-note" value="${escapeAttr(entry.note)}"></label>
       <label>内容<textarea class="vkb-entry-content" rows="8">${escapeHtml(entry.content)}</textarea></label>
@@ -529,6 +567,11 @@ function bindEntryEvents(node) {
   });
   node.querySelector('.vkb-entry-source-type')?.addEventListener('change', async (event) => {
     entry.sourceType = event.target.value === 'possible' ? 'possible' : 'confirmed';
+    if (!entry.triggerMode) entry.triggerMode = defaultTriggerModeForEntry(entry);
+    await saveState();
+  });
+  node.querySelector('.vkb-entry-trigger-mode')?.addEventListener('change', async (event) => {
+    entry.triggerMode = ['broad', 'normal', 'strict'].includes(event.target.value) ? event.target.value : 'normal';
     await saveState();
   });
   node.querySelector('.vkb-entry-keywords')?.addEventListener('change', async (event) => {
@@ -609,6 +652,7 @@ function normalizeEntries(entries) {
       id: item.id || uid(),
       enabled: item.enabled !== false,
       sourceType: item.sourceType === 'possible' ? 'possible' : 'confirmed',
+      triggerMode: ['broad', 'normal', 'strict'].includes(item.triggerMode) ? item.triggerMode : defaultTriggerModeForEntry(item),
       title: String(item.title || item.name || '未命名条目').trim(),
       keywords: Array.isArray(item.keywords) ? item.keywords.map(String) : String(item.keywords || '').split(',').map((keyword) => keyword.trim()).filter(Boolean),
       content: String(item.content || item.text || ''),
@@ -630,6 +674,7 @@ function parseTextEntries(text) {
         id: uid(),
         enabled: true,
         sourceType: 'confirmed',
+        triggerMode: 'normal',
         title,
         keywords: [title],
         content: block,

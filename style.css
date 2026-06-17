@@ -2,12 +2,30 @@
   margin: 8px 0;
 }
 
+.variable-lorebook * {
+  box-sizing: border-box;
+}
+
 .variable-lorebook .vkb-toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
   margin: 8px 0;
+}
+
+.variable-lorebook .menu_button {
+  width: auto;
+  min-width: 72px;
+  max-width: 100%;
+  white-space: nowrap;
+  writing-mode: horizontal-tb;
+  text-orientation: mixed;
+}
+
+.variable-lorebook input,
+.variable-lorebook textarea {
+  min-width: 0;
 }
 
 .variable-lorebook .vkb-grid {
@@ -86,7 +104,78 @@
 }
 
 @media (max-width: 640px) {
+  .variable-lorebook .inline-drawer-content {
+    padding-inline: 8px;
+  }
+
+  .variable-lorebook .vkb-toolbar {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  .variable-lorebook .vkb-toolbar .checkbox_label {
+    grid-column: 1 / -1;
+    min-height: 34px;
+  }
+
+  .variable-lorebook .vkb-toolbar .menu_button {
+    width: 100%;
+    min-width: 0;
+    min-height: 34px;
+    padding-inline: 8px;
+    text-align: center;
+  }
+
+  .variable-lorebook .vkb-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .variable-lorebook .vkb-variable-row {
+    grid-template-columns: 1fr auto;
+    align-items: center;
+  }
+
+  .variable-lorebook .vkb-variable-row .vkb-var-key,
+  .variable-lorebook .vkb-variable-row .vkb-var-value {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .variable-lorebook .vkb-delete-variable {
+    grid-column: 1 / -1;
+    justify-self: start;
+    min-width: 72px;
+  }
+
+  .variable-lorebook #vkb-add-variable {
+    width: auto;
+    min-width: 96px;
+  }
+
+  .variable-lorebook .vkb-entry summary {
+    min-width: 0;
+  }
+
+  .variable-lorebook .vkb-entry summary span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .variable-lorebook .vkb-entry-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .variable-lorebook .vkb-entry-actions .menu_button {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 360px) {
+  .variable-lorebook .vkb-grid {
     grid-template-columns: 1fr;
   }
 }

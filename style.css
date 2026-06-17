@@ -1,0 +1,92 @@
+.variable-lorebook {
+  margin: 8px 0;
+}
+
+.variable-lorebook .vkb-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 8px 0;
+}
+
+.variable-lorebook .vkb-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.variable-lorebook label {
+  display: grid;
+  gap: 4px;
+}
+
+.variable-lorebook .checkbox_label {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.variable-lorebook .vkb-section {
+  margin-top: 12px;
+}
+
+.variable-lorebook .vkb-section-title {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.variable-lorebook .vkb-variable-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(160px, 2fr) auto;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.variable-lorebook .vkb-entry {
+  border: 1px solid var(--SmartThemeBorderColor);
+  border-radius: 6px;
+  padding: 8px;
+  margin: 8px 0;
+}
+
+.variable-lorebook .vkb-entry summary {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  cursor: pointer;
+  min-height: 28px;
+}
+
+.variable-lorebook .vkb-entry textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.variable-lorebook .vkb-entry-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.variable-lorebook .vkb-pill {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--SmartThemeBorderColor);
+  border-radius: 999px;
+  padding: 2px 8px;
+  margin: 2px 4px 2px 0;
+  font-size: 0.9em;
+}
+
+.variable-lorebook .vkb-muted {
+  opacity: 0.75;
+}
+
+@media (max-width: 640px) {
+  .variable-lorebook .vkb-variable-row {
+    grid-template-columns: 1fr;
+  }
+}

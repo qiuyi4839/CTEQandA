@@ -24,7 +24,8 @@
 }
 
 .variable-lorebook input,
-.variable-lorebook textarea {
+.variable-lorebook textarea,
+.variable-lorebook select {
   min-width: 0;
 }
 

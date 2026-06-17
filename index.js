@@ -1,5 +1,11 @@
+import { BUILTIN_CTE_ENTRIES } from './data/builtin-cte.js';
+
 const EXTENSION_NAME = '变量知识库';
 const STORAGE_KEY = 'st_variable_lorebook_state_v1';
+const SOURCE_TYPE_LABELS = {
+  confirmed: '已确定内容',
+  possible: '可能发生',
+};
 
 const DEFAULT_STATE = {
   settings: {
@@ -18,11 +24,13 @@ const DEFAULT_STATE = {
     {
       id: 'love_worthiness_rank',
       enabled: true,
+      sourceType: 'confirmed',
       title: '恋爱配得感排序',
       keywords: ['恋爱配得感', '配得感', '感情自信', '恋爱排序'],
       content: '关于恋爱配得感排序:\n最高: 亓谢/周锦宁.\n靠前: 魏月华/桑洛凡.\n中间: 鹿言/魏星泽.\n偏低: 谌绪/秦述.\n最低: 司洛/孟明赫.',
       note: '示例条目，可删除或改写。',
     },
+    ...BUILTIN_CTE_ENTRIES,
   ],
 };
 
@@ -39,6 +47,8 @@ async function loadState() {
 
   const saved = await localforage.getItem(STORAGE_KEY);
   state = mergeState(saved);
+  const changed = mergeBuiltinEntries();
+  if (changed) await saveState();
 }
 
 async function saveState() {
@@ -54,8 +64,20 @@ function mergeState(saved) {
   return {
     settings: { ...DEFAULT_STATE.settings, ...(saved.settings || {}) },
     variables: Array.isArray(saved.variables) ? saved.variables : structuredClone(DEFAULT_STATE.variables),
-    entries: Array.isArray(saved.entries) ? saved.entries : structuredClone(DEFAULT_STATE.entries),
+    entries: normalizeEntries(Array.isArray(saved.entries) ? saved.entries : structuredClone(DEFAULT_STATE.entries)),
   };
+}
+
+function mergeBuiltinEntries() {
+  const existingIds = new Set(state.entries.map((entry) => entry.id));
+  const existingContents = new Set(state.entries.map((entry) => normalizeText(entry.content)));
+  const missing = BUILTIN_CTE_ENTRIES.filter((entry) => {
+    return !existingIds.has(entry.id) && !existingContents.has(normalizeText(entry.content));
+  });
+  if (!missing.length) return false;
+
+  state.entries = [...state.entries, ...structuredClone(missing)];
+  return true;
 }
 
 function uid() {
@@ -151,22 +173,49 @@ function applyVariables(content) {
 function buildInjection(matches) {
   if (!matches.length) return '';
 
-  const body = matches
-    .map(({ entry }) => {
-      const title = state.settings.includeMatchedTitles ? `【${entry.title || '未命名条目'}】\n` : '';
-      return `${title}${applyVariables(entry.content)}`.trim();
-    })
-    .filter(Boolean)
-    .join('\n\n');
+  const confirmed = matches.filter(({ entry }) => (entry.sourceType || 'confirmed') === 'confirmed');
+  const possible = matches.filter(({ entry }) => entry.sourceType === 'possible');
+  const sections = [];
 
+  const confirmedBody = formatMatchedEntries(confirmed);
+  if (confirmedBody) {
+    sections.push([
+      '【已确定内容】',
+      '这些是已经确定的设定，可作为事实使用。',
+      confirmedBody,
+    ].join('\n'));
+  }
+
+  const possibleBody = formatMatchedEntries(possible);
+  if (possibleBody) {
+    sections.push([
+      '【可能发生】',
+      '这些是条件成立时可能发生的情境，不代表已经发生。只有当前剧情或用户输入符合条件时才可参考，不能当作既定事实。',
+      possibleBody,
+    ].join('\n'));
+  }
+
+  const body = sections.join('\n\n');
   const maxChars = Math.max(200, Number(state.settings.maxInjectedChars) || 3000);
   const clipped = body.length > maxChars ? `${body.slice(0, maxChars)}\n[变量知识库: 内容已按长度上限截断]` : body;
 
   return [
     '[变量知识库命中内容]',
-    '以下是本轮聊天触发的设定资料。仅在与当前对话相关时使用，不要主动复述资料来源。',
+    '以下是本轮聊天触发的设定资料。注意区分“已确定内容”和“可能发生”，不要把可能发生当成已经发生。',
     clipped,
   ].join('\n');
+}
+
+function formatMatchedEntries(matches) {
+  return matches
+    .map(({ entry }) => {
+      const sourceType = entry.sourceType || 'confirmed';
+      const label = SOURCE_TYPE_LABELS[sourceType] || SOURCE_TYPE_LABELS.confirmed;
+      const title = state.settings.includeMatchedTitles ? `【${label} / ${entry.title || '未命名条目'}】\n` : '';
+      return `${title}${applyVariables(entry.content)}`.trim();
+    })
+    .filter(Boolean)
+    .join('\n\n');
 }
 
 function insertSystemNote(chat, content) {
@@ -305,6 +354,7 @@ function bindSettingsEvents() {
     state.entries.unshift({
       id: uid(),
       enabled: true,
+      sourceType: 'confirmed',
       title: '新条目',
       keywords: [],
       content: '',
@@ -383,6 +433,12 @@ function renderEntries() {
         <span>${escapeHtml(entry.title || '未命名条目')}</span>
       </summary>
       <label>标题<input class="text_pole vkb-entry-title" value="${escapeAttr(entry.title)}"></label>
+      <label>资料类型
+        <select class="text_pole vkb-entry-source-type">
+          <option value="confirmed" ${(entry.sourceType || 'confirmed') === 'confirmed' ? 'selected' : ''}>已确定内容</option>
+          <option value="possible" ${entry.sourceType === 'possible' ? 'selected' : ''}>可能发生</option>
+        </select>
+      </label>
       <label>关键词，用逗号分隔；正则可写成 /表达式/i<input class="text_pole vkb-entry-keywords" value="${escapeAttr((entry.keywords || []).join(', '))}"></label>
       <label>备注<input class="text_pole vkb-entry-note" value="${escapeAttr(entry.note)}"></label>
       <label>内容<textarea class="vkb-entry-content" rows="8">${escapeHtml(entry.content)}</textarea></label>
@@ -408,6 +464,10 @@ function bindEntryEvents(node) {
     entry.title = event.target.value.trim();
     await saveState();
     renderEntries();
+  });
+  node.querySelector('.vkb-entry-source-type')?.addEventListener('change', async (event) => {
+    entry.sourceType = event.target.value === 'possible' ? 'possible' : 'confirmed';
+    await saveState();
   });
   node.querySelector('.vkb-entry-keywords')?.addEventListener('change', async (event) => {
     entry.keywords = event.target.value.split(',').map((item) => item.trim()).filter(Boolean);
@@ -486,6 +546,7 @@ function normalizeEntries(entries) {
     .map((item) => ({
       id: item.id || uid(),
       enabled: item.enabled !== false,
+      sourceType: item.sourceType === 'possible' ? 'possible' : 'confirmed',
       title: String(item.title || item.name || '未命名条目').trim(),
       keywords: Array.isArray(item.keywords) ? item.keywords.map(String) : String(item.keywords || '').split(',').map((keyword) => keyword.trim()).filter(Boolean),
       content: String(item.content || item.text || ''),
@@ -506,6 +567,7 @@ function parseTextEntries(text) {
       return {
         id: uid(),
         enabled: true,
+        sourceType: 'confirmed',
         title,
         keywords: [title],
         content: block,

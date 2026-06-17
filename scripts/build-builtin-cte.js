@@ -116,3 +116,4 @@ fs.writeFileSync(
 );
 
 console.log(`wrote ${entries.length} entries`);
+require('./upgrade-builtin-trigger-modes.js');

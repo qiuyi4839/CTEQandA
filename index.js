@@ -6,6 +6,7 @@ const SOURCE_TYPE_LABELS = {
   confirmed: '已确定内容',
   possible: '可能发生',
 };
+const STOP_KEYWORDS = new Set(['cte', '如果', '可能发生', '已确定内容', '{{user}}', 'user', '用户']);
 
 const DEFAULT_STATE = {
   settings: {
@@ -16,6 +17,7 @@ const DEFAULT_STATE = {
     maxInjectedChars: 3000,
     matchTitle: true,
     includeMatchedTitles: true,
+    scanUserOnly: true,
   },
   variables: [
     { key: '当前世界观', value: '默认世界观' },
@@ -69,14 +71,33 @@ function mergeState(saved) {
 }
 
 function mergeBuiltinEntries() {
+  let changed = false;
+  const builtinsById = new Map(BUILTIN_CTE_ENTRIES.map((entry) => [entry.id, entry]));
+
+  state.entries = state.entries.map((entry) => {
+    const builtin = builtinsById.get(entry.id);
+    if (!builtin) return entry;
+
+    changed = true;
+    return {
+      ...entry,
+      sourceType: builtin.sourceType,
+      title: builtin.title,
+      keywords: structuredClone(builtin.keywords),
+      content: builtin.content,
+      note: builtin.note,
+    };
+  });
+
   const existingIds = new Set(state.entries.map((entry) => entry.id));
   const existingContents = new Set(state.entries.map((entry) => normalizeText(entry.content)));
   const missing = BUILTIN_CTE_ENTRIES.filter((entry) => {
     return !existingIds.has(entry.id) && !existingContents.has(normalizeText(entry.content));
   });
-  if (!missing.length) return false;
+  if (!missing.length) return changed;
 
   state.entries = [...state.entries, ...structuredClone(missing)];
+  changed = true;
   return true;
 }
 
@@ -90,7 +111,8 @@ function normalizeText(value) {
 
 function getRecentChatText(chat) {
   const count = Math.max(1, Number(state.settings.scanMessages) || 1);
-  return chat
+  const scanSource = state.settings.scanUserOnly ? chat.filter((message) => Boolean(message?.is_user)) : chat;
+  return scanSource
     .slice(-count)
     .map((message) => {
       const name = message?.name ? `${message.name}: ` : '';
@@ -119,6 +141,9 @@ function scoreEntry(entry, sourceText) {
   let score = 0;
 
   for (const keyword of keywords) {
+    const normalizedKeyword = normalizeText(keyword);
+    if (!normalizedKeyword || STOP_KEYWORDS.has(normalizedKeyword)) continue;
+
     const regex = parseRegexKeyword(keyword);
     if (regex) {
       regex.lastIndex = 0;
@@ -126,7 +151,6 @@ function scoreEntry(entry, sourceText) {
       continue;
     }
 
-    const normalizedKeyword = normalizeText(keyword);
     if (normalizedKeyword && normalizedSource.includes(normalizedKeyword)) {
       score += Math.max(1, Math.min(4, Math.ceil(normalizedKeyword.length / 4)));
     }
@@ -146,11 +170,18 @@ function getMatchedEntries(chat) {
   const sourceText = getRecentChatText(chat);
   const minScore = Number(state.settings.minScore) || 1;
   const maxMatches = Math.max(1, Number(state.settings.maxMatches) || 1);
+  const seenContents = new Set();
 
   return state.entries
     .map((entry) => ({ entry, score: scoreEntry(entry, sourceText) }))
     .filter((result) => result.score >= minScore)
     .sort((a, b) => b.score - a.score || String(a.entry.title).localeCompare(String(b.entry.title)))
+    .filter((result) => {
+      const key = normalizeText(result.entry.content);
+      if (seenContents.has(key)) return false;
+      seenContents.add(key);
+      return true;
+    })
     .slice(0, maxMatches);
 }
 
@@ -211,11 +242,27 @@ function formatMatchedEntries(matches) {
     .map(({ entry }) => {
       const sourceType = entry.sourceType || 'confirmed';
       const label = SOURCE_TYPE_LABELS[sourceType] || SOURCE_TYPE_LABELS.confirmed;
-      const title = state.settings.includeMatchedTitles ? `【${label} / ${entry.title || '未命名条目'}】\n` : '';
+      const title = shouldShowEntryTitle(entry) ? `【${label} / ${entry.title || '未命名条目'}】\n` : '';
       return `${title}${applyVariables(entry.content)}`.trim();
     })
     .filter(Boolean)
     .join('\n\n');
+}
+
+function shouldShowEntryTitle(entry) {
+  if (!state.settings.includeMatchedTitles) return false;
+
+  const title = normalizeEntryTitleForCompare(entry.title);
+  const firstLine = normalizeEntryTitleForCompare(String(entry.content || '').split(/\r?\n/)[0]);
+
+  return Boolean(title) && title !== firstLine;
+}
+
+function normalizeEntryTitleForCompare(value) {
+  return normalizeText(value)
+    .replace(/[：:。.]$/g, '')
+    .replace(/\.\.\.$/, '')
+    .trim();
 }
 
 function insertSystemNote(chat, content) {
@@ -317,6 +364,7 @@ function renderSettings() {
         <div class="vkb-toolbar">
           <label class="checkbox_label"><input id="vkb-match-title" type="checkbox" ${state.settings.matchTitle ? 'checked' : ''}>标题也参与匹配</label>
           <label class="checkbox_label"><input id="vkb-include-titles" type="checkbox" ${state.settings.includeMatchedTitles ? 'checked' : ''}>注入时包含标题</label>
+          <label class="checkbox_label"><input id="vkb-scan-user-only" type="checkbox" ${state.settings.scanUserOnly ? 'checked' : ''}>只扫描用户消息</label>
         </div>
         <div class="vkb-section">
           <div class="vkb-section-title">变量</div>
@@ -349,6 +397,7 @@ function bindSettingsEvents() {
   bindSetting('#vkb-max-chars', 'maxInjectedChars', 'value', Number);
   bindSetting('#vkb-match-title', 'matchTitle', 'checked');
   bindSetting('#vkb-include-titles', 'includeMatchedTitles', 'checked');
+  bindSetting('#vkb-scan-user-only', 'scanUserOnly', 'checked');
 
   document.querySelector('#vkb-add-entry')?.addEventListener('click', async () => {
     state.entries.unshift({

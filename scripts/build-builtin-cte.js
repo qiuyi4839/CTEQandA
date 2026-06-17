@@ -13,25 +13,6 @@ const sources = [
   },
 ];
 
-const names = [
-  '魏月华',
-  '桑洛凡',
-  '魏星泽',
-  '秦述',
-  '鹿言',
-  '谌绪',
-  '谌朔',
-  '亓谢',
-  '周锦宁',
-  '司洛',
-  '孟明赫',
-  '陈野',
-  '苏青黛',
-  'CTE',
-  '耶耶',
-  '{{user}}',
-];
-
 function splitBlocks(text) {
   const lines = text.replace(/\r\n/g, '\n').split('\n');
   const blocks = [];
@@ -74,24 +55,18 @@ function cleanTitle(block) {
 function keywordsFor(block, title, type) {
   const set = new Set();
 
-  for (const name of names) {
-    if (block.includes(name)) set.add(name);
-  }
-
   const raw = title
     .replace(/\{\{user\}\}/g, '用户')
     .replace(/[，。,.!！?？:：()（）/]/g, ' ');
 
+  const aboutMatch = raw.match(/关于(.+?)(排序|情况|水平|衣着|歌曲|队服|做饭|酒量|体型|表现|事情)?$/);
+  if (aboutMatch?.[1]) set.add(aboutMatch[1].trim());
+
   for (const part of raw.split(/\s+/)) {
     const keyword = part.trim();
-    if (keyword.length >= 2 && keyword.length <= 12 && !/^(如果|关于|以下是)$/.test(keyword)) {
+    if (keyword.length >= 3 && keyword.length <= 18 && !/^(如果|关于|以下是|可能发生|已确定内容|用户)$/.test(keyword)) {
       set.add(keyword);
     }
-  }
-
-  if (type === 'possible') {
-    set.add('如果');
-    set.add('可能发生');
   }
 
   return Array.from(set).slice(0, 12);

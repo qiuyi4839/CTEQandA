@@ -8,6 +8,40 @@ const SOURCE_TYPE_LABELS = {
   possible: '可能发生',
 };
 const STOP_KEYWORDS = new Set(['cte', '如果', '可能发生', '已确定内容', '{{user}}', 'user', '用户']);
+const SCENE_TRIGGER_KEYWORDS = new Set([
+  '结婚',
+  '失联',
+  '哭了',
+  '不回消息',
+  '打游戏',
+  '沉迷游戏',
+  '24小时不回消息',
+  '打电竞',
+  '磕cp',
+  '磕他们cp',
+  '磕他们之间的cp',
+  '情趣玩具',
+  '年龄颠倒',
+  '作弊',
+  '小纸条',
+  '不爱惜自己',
+  '厨房杀手',
+]);
+const CHARACTER_TRIGGER_NAMES = [
+  '魏月华',
+  '桑洛凡',
+  '魏星泽',
+  '秦述',
+  '鹿言',
+  '谌绪',
+  '谌朔',
+  '亓谢',
+  '周锦宁',
+  '司洛',
+  '孟明赫',
+  '陈野',
+  '苏青黛',
+];
 const TRIGGER_MODE_LABELS = {
   broad: '宽泛',
   normal: '普通',
@@ -147,6 +181,17 @@ function parseRegexKeyword(keyword) {
   }
 }
 
+function keywordScore(normalizedKeyword) {
+  const baseScore = Math.max(1, Math.min(4, Math.ceil(normalizedKeyword.length / 4)));
+  if (SCENE_TRIGGER_KEYWORDS.has(normalizedKeyword)) return 3;
+  return isCharacterKeyword(normalizedKeyword) ? Math.max(2, baseScore) : baseScore;
+}
+
+function isCharacterKeyword(normalizedKeyword) {
+  return normalizedKeyword.length >= 3
+    && CHARACTER_TRIGGER_NAMES.some((name) => normalizedKeyword.includes(normalizeText(name)));
+}
+
 function scoreEntry(entry, sourceText) {
   if (!entry?.enabled) return 0;
 
@@ -173,9 +218,9 @@ function scoreEntry(entry, sourceText) {
     }
 
     if (normalizedKeyword && normalizedSource.includes(normalizedKeyword)) {
-      score += Math.max(1, Math.min(4, Math.ceil(normalizedKeyword.length / 4)));
+      score += keywordScore(normalizedKeyword);
       matchedKeywords += 1;
-      if (normalizedKeyword.length >= 4) hasStrongMatch = true;
+      if (normalizedKeyword.length >= 4 || isCharacterKeyword(normalizedKeyword)) hasStrongMatch = true;
     }
   }
 

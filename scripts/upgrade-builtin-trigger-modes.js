@@ -48,6 +48,7 @@ const topicTerms = [
   '底线',
   'MVP',
   'FMVP',
+  '叛逆',
   '酒量',
   '做饭',
   '打架',
@@ -67,6 +68,9 @@ const topicTerms = [
   '耶耶',
   '手机游戏',
   '游戏',
+  '打游戏',
+  '沉迷游戏',
+  '不看手机',
   '外卖',
   '奶茶',
   '马卡龙',
@@ -86,7 +90,10 @@ const topicTerms = [
   '微博',
   '旅游',
   'CP',
+  '磕cp',
   '钉',
+  '打钉',
+  '乳钉',
   '喝多',
   '喝醉',
   '迟到',
@@ -113,6 +120,7 @@ const topicTerms = [
   '手伤',
   '退役',
   '打法',
+  '打电竞',
   'LOL',
   'MBTI',
   '体型',
@@ -134,14 +142,22 @@ const topicTerms = [
   '精液',
   '情趣内衣',
   '情趣玩具',
+  '玩具',
+  '吃醋',
   '内裤',
   '丝袜',
   '结婚',
   '哭',
   '失联',
+  '24小时',
+  '不回消息',
   '受伤',
+  '不爱惜自己',
   '厨房杀手',
   '取外号',
+  '外号',
+  '作弊',
+  '小纸条',
   '一百万',
   '纹身',
 ];
@@ -152,6 +168,7 @@ const broadGenericTopics = new Set([
   '关怀',
   '相处',
   '衣服',
+  '玩具',
   '关系',
   '旅游',
   '冠军',
@@ -179,7 +196,7 @@ const groupAliasTopics = new Set([
   '胆子',
 ]);
 
-function uniqueKeywords(items) {
+function uniqueKeywords(items, limit = 10) {
   const result = [];
   const seen = new Set();
 
@@ -196,7 +213,7 @@ function uniqueKeywords(items) {
 
     seen.add(keyword);
     result.push(keyword);
-    if (result.length >= 10) break;
+    if (result.length >= limit) break;
   }
 
   return result;
@@ -206,7 +223,7 @@ function keywordsFor(entry) {
   const text = `${entry.title}\n${entry.content}`;
   const mode = triggerModeFor(entry);
   const names = characterNames.filter((name) => text.includes(name));
-  const topics = topicTerms.filter((term) => text.includes(term));
+  const topics = topicTerms.filter((term) => text.includes(term) && !(entry.sourceType === 'possible' && term === '家'));
   const keywords = [];
 
   const about = text.match(/关于(.{2,12}?)(排序|情况|水平|衣着|歌曲|队服|做饭|酒量|体型|表现|事情)?[:：\n]/);
@@ -224,8 +241,22 @@ function keywordsFor(entry) {
     }
   }
 
-  for (const name of names.slice(0, 3)) {
-    for (const topic of topics.slice(0, 3)) {
+  if (entry.sourceType === 'possible' && /游戏/.test(text) && /(失联|不看手机|24小时)/.test(text)) {
+    keywords.push('打游戏', '不回消息', '24小时不回消息');
+  }
+
+  if (entry.sourceType === 'possible' && /\{\{user\}\}哭了[:：]?/.test(text)) {
+    keywords.push('哭了', '用户哭了');
+  }
+
+  if (/磕.{0,8}cp/i.test(text)) {
+    keywords.push('磕cp', '磕他们cp', '磕他们之间的cp');
+  }
+
+  const nameLimit = entry.sourceType === 'possible' ? names.length : 3;
+  const topicLimit = entry.sourceType === 'possible' ? 4 : 3;
+  for (const name of names.slice(0, nameLimit)) {
+    for (const topic of topics.slice(0, topicLimit)) {
       keywords.push(`${name}${topic}`);
     }
   }
@@ -237,7 +268,7 @@ function keywordsFor(entry) {
     .trim();
   keywords.push(compactTitle);
 
-  return uniqueKeywords(keywords);
+  return uniqueKeywords(keywords, entry.sourceType === 'possible' ? 48 : 10);
 }
 
 function triggerModeFor(entry) {

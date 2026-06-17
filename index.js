@@ -2,6 +2,7 @@ import { BUILTIN_CTE_ENTRIES } from './data/builtin-cte.js';
 
 const EXTENSION_NAME = '变量知识库';
 const STORAGE_KEY = 'st_variable_lorebook_state_v1';
+const SETTINGS_VERSION = 2;
 const SOURCE_TYPE_LABELS = {
   confirmed: '已确定内容',
   possible: '可能发生',
@@ -10,13 +11,14 @@ const STOP_KEYWORDS = new Set(['cte', '如果', '可能发生', '已确定内容
 
 const DEFAULT_STATE = {
   settings: {
+    version: SETTINGS_VERSION,
     enabled: true,
     scanMessages: 6,
     maxMatches: 4,
     minScore: 1,
     maxInjectedChars: 3000,
     matchTitle: true,
-    includeMatchedTitles: true,
+    includeMatchedTitles: false,
     scanUserOnly: true,
   },
   variables: [
@@ -63,8 +65,14 @@ async function saveState() {
 function mergeState(saved) {
   if (!saved || typeof saved !== 'object') return structuredClone(DEFAULT_STATE);
 
+  const settings = { ...DEFAULT_STATE.settings, ...(saved.settings || {}) };
+  if ((saved.settings?.version || 1) < 2) {
+    settings.includeMatchedTitles = false;
+    settings.version = SETTINGS_VERSION;
+  }
+
   return {
-    settings: { ...DEFAULT_STATE.settings, ...(saved.settings || {}) },
+    settings,
     variables: Array.isArray(saved.variables) ? saved.variables : structuredClone(DEFAULT_STATE.variables),
     entries: normalizeEntries(Array.isArray(saved.entries) ? saved.entries : structuredClone(DEFAULT_STATE.entries)),
   };
@@ -254,8 +262,13 @@ function shouldShowEntryTitle(entry) {
 
   const title = normalizeEntryTitleForCompare(entry.title);
   const firstLine = normalizeEntryTitleForCompare(String(entry.content || '').split(/\r?\n/)[0]);
+  const firstLineWithoutPrefix = firstLine.replace(/^关于/, '');
 
-  return Boolean(title) && title !== firstLine;
+  return Boolean(title)
+    && title !== firstLine
+    && title !== firstLineWithoutPrefix
+    && !firstLine.includes(title)
+    && !firstLineWithoutPrefix.includes(title);
 }
 
 function normalizeEntryTitleForCompare(value) {
